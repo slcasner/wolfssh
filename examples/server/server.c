@@ -1,6 +1,6 @@
 /* server.c
  *
- * Copyright (C) 2014-2017 wolfSSL Inc.
+ * Copyright (C) 2014-2020 wolfSSL Inc.
  *
  * This file is part of wolfSSH.
  *
@@ -18,6 +18,9 @@
  * along with wolfSSH.  If not, see <http://www.gnu.org/licenses/>.
  */
 
+#define WOLFSSH_TEST_SERVER
+#define WOLFSSH_TEST_THREADING
+
 
 #ifdef WOLFSSL_USER_SETTINGS
     #include <wolfssl/wolfcrypt/settings.h>
@@ -29,12 +32,18 @@
 #include <wolfssl/wolfcrypt/coding.h>
 #include <wolfssh/ssh.h>
 #include <wolfssh/test.h>
+#include <wolfssl/wolfcrypt/ecc.h>
 #include "examples/server/server.h"
 
 #ifdef NO_FILESYSTEM
     #include <wolfssh/certs_test.h>
+    #ifdef WOLFSSH_SCP
+        #include <wolfssh/wolfscp.h>
+    #endif
 #endif
 
+
+#ifndef NO_WOLFSSH_SERVER
 
 static const char serverBanner[] = "wolfSSH Example Server\n";
 
@@ -43,6 +52,7 @@ typedef struct {
     WOLFSSH* ssh;
     SOCKET_T fd;
     word32 id;
+    char nonBlock;
 } thread_ctx_t;
 
 
@@ -94,11 +104,75 @@ static int dump_stats(thread_ctx_t* ctx)
 }
 
 
+static int NonBlockSSH_accept(WOLFSSH* ssh)
+{
+    int ret;
+    int error;
+    SOCKET_T sockfd;
+    int select_ret = 0;
+
+    ret = wolfSSH_accept(ssh);
+    error = wolfSSH_get_error(ssh);
+    sockfd = (SOCKET_T)wolfSSH_get_fd(ssh);
+
+    while (ret != WS_SUCCESS &&
+            (error == WS_WANT_READ || error == WS_WANT_WRITE))
+    {
+        if (error == WS_WANT_READ)
+            printf("... client would read block\n");
+        else if (error == WS_WANT_WRITE)
+            printf("... client would write block\n");
+
+        select_ret = tcp_select(sockfd, 1);
+        if (select_ret == WS_SELECT_RECV_READY  ||
+            select_ret == WS_SELECT_ERROR_READY ||
+            error == WS_WANT_WRITE)
+        {
+            ret = wolfSSH_accept(ssh);
+            error = wolfSSH_get_error(ssh);
+        }
+        else if (select_ret == WS_SELECT_TIMEOUT)
+            error = WS_WANT_READ;
+        else
+            error = WS_FATAL_ERROR;
+    }
+
+    return ret;
+}
+
+
 static THREAD_RETURN WOLFSSH_THREAD server_worker(void* vArgs)
 {
+    int ret;
     thread_ctx_t* threadCtx = (thread_ctx_t*)vArgs;
 
-    if (wolfSSH_accept(threadCtx->ssh) == WS_SUCCESS) {
+#if defined(WOLFSSH_SCP) && defined(NO_FILESYSTEM)
+    ScpBuffer scpBufferRecv, scpBufferSend;
+    byte fileBuffer[49000];
+    byte fileTmp[] = "wolfSSH SCP buffer file";
+
+    WMEMSET(&scpBufferRecv, 0, sizeof(ScpBuffer));
+    scpBufferRecv.buffer   = fileBuffer;
+    scpBufferRecv.bufferSz = sizeof(fileBuffer);
+    wolfSSH_SetScpRecvCtx(threadCtx->ssh, (void*)&scpBufferRecv);
+
+    /* make buffer file to send if asked */
+    WMEMSET(&scpBufferSend, 0, sizeof(ScpBuffer));
+    WMEMCPY(scpBufferSend.name, "test.txt", sizeof("test.txt"));
+    scpBufferSend.nameSz   = WSTRLEN("test.txt");
+    scpBufferSend.buffer   = fileTmp;
+    scpBufferSend.bufferSz = sizeof(fileBuffer);
+    scpBufferSend.fileSz   = sizeof(fileTmp);
+    scpBufferSend.mode     = 0x1A4;
+    wolfSSH_SetScpSendCtx(threadCtx->ssh, (void*)&scpBufferSend);
+#endif
+
+    if (!threadCtx->nonBlock)
+        ret = wolfSSH_accept(threadCtx->ssh);
+    else
+        ret = NonBlockSSH_accept(threadCtx->ssh);
+
+    if (ret == WS_SUCCESS) {
         byte* buf = NULL;
         byte* tmpBuf;
         int bufSz, backlogSz = 0, rxSz, txSz, stop = 0, txSum;
@@ -113,9 +187,14 @@ static THREAD_RETURN WOLFSSH_THREAD server_worker(void* vArgs)
                 buf = tmpBuf;
 
             if (!stop) {
-                rxSz = wolfSSH_stream_read(threadCtx->ssh,
-                                           buf + backlogSz,
-                                           EXAMPLE_BUFFER_SZ);
+                do {
+                    rxSz = wolfSSH_stream_read(threadCtx->ssh,
+                                               buf + backlogSz,
+                                               EXAMPLE_BUFFER_SZ);
+                    if (rxSz <= 0)
+                        rxSz = wolfSSH_get_error(threadCtx->ssh);
+                } while (rxSz == WS_WANT_READ || rxSz == WS_WANT_WRITE);
+
                 if (rxSz > 0) {
                     backlogSz += rxSz;
                     txSum = 0;
@@ -161,7 +240,27 @@ static THREAD_RETURN WOLFSSH_THREAD server_worker(void* vArgs)
         } while (!stop);
 
         free(buf);
+    } else if (ret == WS_SCP_COMPLETE) {
+        printf("scp file transfer completed\n");
+    #if defined(WOLFSSH_SCP) && defined(NO_FILESYSTEM)
+        if (scpBufferRecv.fileSz > 0) {
+            word32 z;
+
+            printf("file name : %s\n", scpBufferRecv.name);
+            printf("     size : %d\n", scpBufferRecv.fileSz);
+            printf("     mode : %o\n", scpBufferRecv.mode);
+            printf("    mTime : %lu\n", scpBufferRecv.mTime);
+            printf("\n");
+
+            for (z = 0; z < scpBufferRecv.fileSz; z++)
+                printf("%c", scpBufferRecv.buffer[z]);
+            printf("\n");
+        }
+    #endif
+    } else if (ret == WS_SFTP_COMPLETE) {
+        printf("Use example/echoserver/echoserver for SFTP\n");
     }
+    wolfSSH_stream_exit(threadCtx->ssh, 0);
     WCLOSESOCKET(threadCtx->fd);
     wolfSSH_free(threadCtx->ssh);
     free(threadCtx);
@@ -249,7 +348,7 @@ typedef struct PwMap {
     byte type;
     byte username[32];
     word32 usernameSz;
-    byte p[SHA256_DIGEST_SIZE];
+    byte p[WC_SHA256_DIGEST_SIZE];
     struct PwMap* next;
 } PwMap;
 
@@ -266,7 +365,7 @@ static PwMap* PwMapNew(PwMapList* list, byte type, const byte* username,
 
     map = (PwMap*)malloc(sizeof(PwMap));
     if (map != NULL) {
-        Sha256 sha;
+        wc_Sha256 sha;
         byte flatSz[4];
 
         map->type = type;
@@ -353,10 +452,16 @@ static int LoadPasswordBuffer(byte* buf, word32 bufSz, PwMapList* list)
 
     while (*str != 0) {
         delimiter = strchr(str, ':');
+        if (delimiter == NULL) {
+            return -1;
+        }
         username = str;
         *delimiter = 0;
         password = delimiter + 1;
         str = strchr(password, '\n');
+        if (str == NULL) {
+            return -1;
+        }
         *str = 0;
         str++;
         if (PwMapNew(list, WOLFSSH_USERAUTH_PASSWORD,
@@ -394,13 +499,22 @@ static int LoadPublicKeyBuffer(byte* buf, word32 bufSz, PwMapList* list)
     while (*str != 0) {
         /* Skip the public key type. This example will always be ssh-rsa. */
         delimiter = strchr(str, ' ');
+        if (delimiter == NULL) {
+            return -1;
+        }
         str = delimiter + 1;
         delimiter = strchr(str, ' ');
+        if (delimiter == NULL) {
+            return -1;
+        }
         publicKey64 = (byte*)str;
         *delimiter = 0;
         publicKey64Sz = (word32)(delimiter - str);
         str = delimiter + 1;
         delimiter = strchr(str, '\n');
+        if (delimiter == NULL) {
+            return -1;
+        }
         username = (byte*)str;
         *delimiter = 0;
         usernameSz = (word32)(delimiter - str);
@@ -431,7 +545,7 @@ static int wsUserAuth(byte authType,
 {
     PwMapList* list;
     PwMap* map;
-    byte authHash[SHA256_DIGEST_SIZE];
+    byte authHash[WC_SHA256_DIGEST_SIZE];
 
     if (ctx == NULL) {
         fprintf(stderr, "wsUserAuth: ctx not set");
@@ -446,7 +560,7 @@ static int wsUserAuth(byte authType,
 
     /* Hash the password or public key with its length. */
     {
-        Sha256 sha;
+        wc_Sha256 sha;
         byte flatSz[4];
         wc_InitSha256(&sha);
         if (authType == WOLFSSH_USERAUTH_PASSWORD) {
@@ -474,7 +588,7 @@ static int wsUserAuth(byte authType,
             memcmp(authData->username, map->username, map->usernameSz) == 0) {
 
             if (authData->type == map->type) {
-                if (memcmp(map->p, authHash, SHA256_DIGEST_SIZE) == 0) {
+                if (memcmp(map->p, authHash, WC_SHA256_DIGEST_SIZE) == 0) {
                     return WOLFSSH_USERAUTH_SUCCESS;
                 }
                 else {
@@ -497,9 +611,10 @@ static int wsUserAuth(byte authType,
 static void ShowUsage(void)
 {
     printf("server %s\n", LIBWOLFSSH_VERSION_STRING);
-    printf("-h          Help, print this usage\n");
-    printf("-m          Allow multiple connections\n");
-    printf("-e          Use ECC private key\n");
+    printf(" -h            display this help and exit\n");
+    printf(" -m            allow multiple connections\n");
+    printf(" -e            use ECC private key\n");
+    printf(" -N            use non-blocking sockets\n");
 }
 
 
@@ -510,16 +625,17 @@ THREAD_RETURN WOLFSSH_THREAD server_test(void* args)
     SOCKET_T listenFd = 0;
     word32 defaultHighwater = EXAMPLE_HIGHWATER_MARK;
     word32 threadCount = 0;
-    int multipleConnections = 0;
-    int useEcc = 0;
-    char ch;
     word16 port = wolfSshPort;
+    char multipleConnections = 0;
+    char useEcc = 0;
+    int  ch;
+    char nonBlock = 0;
 
     int     argc = ((func_args*)args)->argc;
     char**  argv = ((func_args*)args)->argv;
     ((func_args*)args)->return_code = 0;
 
-    while ((ch = mygetopt(argc, argv, "hme")) != -1) {
+    while ((ch = mygetopt(argc, argv, "hmeN")) != -1) {
         switch (ch) {
             case 'h' :
                 ShowUsage();
@@ -533,12 +649,21 @@ THREAD_RETURN WOLFSSH_THREAD server_test(void* args)
                 useEcc = 1;
                 break;
 
+            case 'N' :
+                nonBlock = 1;
+                break;
+
             default:
                 ShowUsage();
                 exit(MY_EX_USAGE);
         }
     }
     myoptind = 0;      /* reset for test cases */
+
+#ifdef NO_RSA
+    /* If wolfCrypt isn't built with RSA, force ECC on. */
+    useEcc = 1;
+#endif
 
     if (wolfSSH_Init() != WS_SUCCESS) {
         fprintf(stderr, "Couldn't initialize wolfSSH.\n");
@@ -560,8 +685,6 @@ THREAD_RETURN WOLFSSH_THREAD server_test(void* args)
         byte buf[SCRATCH_BUFFER_SZ];
         word32 bufSz;
 
-        bufName = useEcc ? "./keys/server-key-ecc.der" :
-                           "./keys/server-key-rsa.der" ;
         bufSz = load_key(useEcc, buf, SCRATCH_BUFFER_SZ);
         if (bufSz == 0) {
             fprintf(stderr, "Couldn't load key.\n");
@@ -592,7 +715,9 @@ THREAD_RETURN WOLFSSH_THREAD server_test(void* args)
         SOCKET_T      clientFd = 0;
         SOCKADDR_IN_T clientAddr;
         socklen_t     clientAddrSz = sizeof(clientAddr);
+#ifndef SINGLE_THREADED
         THREAD_TYPE   thread;
+#endif
         WOLFSSH*      ssh;
         thread_ctx_t* threadCtx;
 
@@ -619,22 +744,25 @@ THREAD_RETURN WOLFSSH_THREAD server_test(void* args)
         if (clientFd == -1)
             err_sys("tcp accept failed");
 
+        if (nonBlock)
+            tcp_set_nonblocking(&clientFd);
+
         wolfSSH_set_fd(ssh, (int)clientFd);
 
         threadCtx->ssh = ssh;
         threadCtx->fd = clientFd;
         threadCtx->id = threadCount++;
+        threadCtx->nonBlock = nonBlock;
 
 #ifndef SINGLE_THREADED
-        start_thread(server_worker, threadCtx, &thread);
+        ThreadStart(server_worker, threadCtx, &thread);
 
         if (multipleConnections)
-            detach_thread(thread);
+            ThreadDetach(thread);
         else
-            join_thread(thread);
+            ThreadJoin(thread);
 #else
         server_worker(threadCtx);
-        (void)thread;
 #endif /* SINGLE_THREADED */
     } while (multipleConnections);
 
@@ -644,9 +772,15 @@ THREAD_RETURN WOLFSSH_THREAD server_test(void* args)
         fprintf(stderr, "Couldn't clean up wolfSSH.\n");
         exit(EXIT_FAILURE);
     }
+#if defined(HAVE_ECC) && defined(FP_ECC) && defined(HAVE_THREAD_LS)
+    wc_ecc_fp_free();  /* free per thread cache */
+#endif
 
     return 0;
 }
+
+#endif /* NO_WOLFSSH_SERVER */
+
 
 #ifndef NO_MAIN_DRIVER
 
@@ -667,7 +801,11 @@ THREAD_RETURN WOLFSSH_THREAD server_test(void* args)
 
         wolfSSH_Init();
 
+#ifndef NO_WOLFSSH_SERVER
         server_test(&args);
+#else
+        printf("wolfSSH compiled without server support\n");
+#endif
 
         wolfSSH_Cleanup();
 

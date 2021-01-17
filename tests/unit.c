@@ -1,6 +1,6 @@
 /* unit.c
  *
- * Copyright (C) 2014-2016 wolfSSL Inc.
+ * Copyright (C) 2014-2020 wolfSSL Inc.
  *
  * This file is part of wolfSSH.
  *
@@ -49,7 +49,7 @@ static int Base16_Decode(const byte* in, word32 inLen,
     word32 outIdx = 0;
 
     if (inLen == 1 && *outLen && in) {
-        byte b = in[inIdx++] - 0x30;  /* 0 starts at 0x30 */
+        byte b = in[inIdx] - 0x30;  /* 0 starts at 0x30 */
 
         /* sanity check */
         if (b >=  sizeof(hexDecode)/sizeof(hexDecode[0]))
@@ -124,6 +124,7 @@ static int ConvertHexToBin(const char* h1, byte** b1, word32* b1Sz,
                             *b1, b1Sz);
         if (ret != 0) {
             FreeBins(*b1, NULL, NULL, NULL);
+            *b1 = NULL;
             return -1;
         }
     }
@@ -134,12 +135,15 @@ static int ConvertHexToBin(const char* h1, byte** b1, word32* b1Sz,
         *b2 = (byte*)malloc(*b2Sz);
         if (*b2 == NULL) {
             FreeBins(b1 ? *b1 : NULL, NULL, NULL, NULL);
+            if (b1) *b1 = NULL;
             return -1;
         }
         ret = Base16_Decode((const byte*)h2, (word32)strlen(h2),
                             *b2, b2Sz);
         if (ret != 0) {
             FreeBins(b1 ? *b1 : NULL, *b2, NULL, NULL);
+            if (b1) *b1 = NULL;
+            *b2 = NULL;
             return -1;
         }
     }
@@ -150,12 +154,17 @@ static int ConvertHexToBin(const char* h1, byte** b1, word32* b1Sz,
         *b3 = (byte*)malloc(*b3Sz);
         if (*b3 == NULL) {
             FreeBins(b1 ? *b1 : NULL, b2 ? *b2 : NULL, NULL, NULL);
+            if (b1) *b1 = NULL;
+            if (b2) *b2 = NULL;
             return -1;
         }
         ret = Base16_Decode((const byte*)h3, (word32)strlen(h3),
                             *b3, b3Sz);
         if (ret != 0) {
             FreeBins(b1 ? *b1 : NULL, b2 ? *b2 : NULL, *b3, NULL);
+            if (b1) *b1 = NULL;
+            if (b2) *b2 = NULL;
+            *b3 = NULL;
             return -1;
         }
     }
@@ -166,12 +175,19 @@ static int ConvertHexToBin(const char* h1, byte** b1, word32* b1Sz,
         *b4 = (byte*)malloc(*b4Sz);
         if (*b4 == NULL) {
             FreeBins(b1 ? *b1 : NULL, b2 ? *b2 : NULL, b3 ? *b3 : NULL, NULL);
+            if (b1) *b1 = NULL;
+            if (b2) *b2 = NULL;
+            if (b3) *b3 = NULL;
             return -1;
         }
         ret = Base16_Decode((const byte*)h4, (word32)strlen(h4),
                             *b4, b4Sz);
         if (ret != 0) {
             FreeBins(b1 ? *b1 : NULL, b2 ? *b2 : NULL, b3 ? *b3 : NULL, *b4);
+            if (b1) *b1 = NULL;
+            if (b2) *b2 = NULL;
+            if (b3) *b3 = NULL;
+            *b4 = NULL;
             return -1;
         }
     }
@@ -192,6 +208,7 @@ typedef struct {
 } KdfTestVector;
 
 
+#ifndef NO_SHA
 /** Test Vector Set #1: SHA-1 **/
 const char kdfTvSet1k[] =
     "35618FD3AABF980A5F766408961600D4933C60DD7B22D69EEB4D7A987C938F6F"
@@ -229,6 +246,7 @@ const char kdfTvSet2c[]         = "CB6D56EC5B9AFECD326D544DA2D22DED";
 const char kdfTvSet2d[]         = "F712F6451F1BD6CE9BAA597AC87C5A24";
 const char kdfTvSet2e[]         = "E42FC62C76B76B37818F78292D3C2226D0264760";
 const char kdfTvSet2f[]         = "D14BE4DD0093A3E759580233C80BB8399CE4C4E7";
+#endif
 
 /** Test Vector Set #3: SHA-256 **/
 const char kdfTvSet3k[] =
@@ -280,6 +298,7 @@ const char kdfTvSet4f[] =
 #define HASH_SHA256 WC_HASH_TYPE_SHA256
 
 static const KdfTestVector kdfTestVectors[] = {
+#ifndef NO_SHA
     {HASH_SHA, 'A', kdfTvSet1k, kdfTvSet1h, kdfTvSet1sid, kdfTvSet1a},
     {HASH_SHA, 'B', kdfTvSet1k, kdfTvSet1h, kdfTvSet1sid, kdfTvSet1b},
     {HASH_SHA, 'C', kdfTvSet1k, kdfTvSet1h, kdfTvSet1sid, kdfTvSet1c},
@@ -292,6 +311,7 @@ static const KdfTestVector kdfTestVectors[] = {
     {HASH_SHA, 'D', kdfTvSet2k, kdfTvSet2h, kdfTvSet2sid, kdfTvSet2d},
     {HASH_SHA, 'E', kdfTvSet2k, kdfTvSet2h, kdfTvSet2sid, kdfTvSet2e},
     {HASH_SHA, 'F', kdfTvSet2k, kdfTvSet2h, kdfTvSet2sid, kdfTvSet2f},
+#endif
     {HASH_SHA256, 'A', kdfTvSet3k, kdfTvSet3h, kdfTvSet3sid, kdfTvSet3a},
     {HASH_SHA256, 'B', kdfTvSet3k, kdfTvSet3h, kdfTvSet3sid, kdfTvSet3b},
     {HASH_SHA256, 'C', kdfTvSet3k, kdfTvSet3h, kdfTvSet3sid, kdfTvSet3c},
@@ -317,7 +337,7 @@ static int test_KDF(void)
     byte* h = NULL;
     byte* sId = NULL;
     byte* eKey = NULL;
-    word32 kSz, hSz, sIdSz, eKeySz;
+    word32 kSz = 0, hSz = 0, sIdSz = 0, eKeySz = 0;
     byte cKey[32]; /* Greater of SHA256_DIGEST_SIZE and AES_BLOCK_SIZE */
     /* sId - Session ID, eKey - Expected Key, cKey - Calculated Key */
 
@@ -327,19 +347,22 @@ static int test_KDF(void)
                                  tv->h, &h, &hSz,
                                  tv->sessionId, &sId, &sIdSz,
                                  tv->expectedKey, &eKey, &eKeySz);
-        if (result != 0) {
+        if (result != 0 || eKey == NULL) {
             printf("KDF: Could not convert test vector %u.\n", i);
-            return -100;
+            result = -100;
         }
 
-        result = wolfSSH_KDF(tv->hashId, tv->keyId, cKey, eKeySz,
-                             k, kSz, h, hSz, sId, sIdSz);
+        if (result == 0) {
+            result = wolfSSH_KDF(tv->hashId, tv->keyId, cKey, eKeySz,
+                    k, kSz, h, hSz, sId, sIdSz);
 
-        if (result != 0) {
-            printf("KDF: Could not derive key.\n");
-            result = -101;
+            if (result != 0) {
+                printf("KDF: Could not derive key.\n");
+                result = -101;
+            }
         }
-        else {
+
+        if (result == 0) {
             if (memcmp(cKey, eKey, eKeySz) != 0) {
                 printf("KDF: Calculated Key does not match Expected Key.\n");
                 result = -102;
@@ -347,6 +370,10 @@ static int test_KDF(void)
         }
 
         FreeBins(k, h, sId, eKey);
+        k = NULL;
+        h = NULL;
+        sId = NULL;
+        eKey = NULL;
 
         if (result != 0) break;
     }
@@ -379,9 +406,67 @@ static int test_RsaKeyGen(void)
 #endif
 
 
+/* Error Code And Message Test */
+
+static int test_Errors(void)
+{
+    const char* errStr;
+    const char* unknownStr = wolfSSH_ErrorToName(1);
+    int result = 0;
+
+#ifdef NO_WOLFSSH_STRINGS
+    /* Ensure a valid error code's string matches an invalid code's.
+     * The string is that error strings are not available.
+     */
+    errStr = wolfSSH_ErrorToName(WS_BAD_ARGUMENT);
+    if (errStr != unknownStr)
+        result = -104;
+#else
+    int i, j = 0;
+    /* Values that are not or no longer error codes. */
+    int missing[] = { -1059 };
+    int missingSz = (int)sizeof(missing)/sizeof(missing[0]);
+
+    /* Check that all errors have a string and it's the same through the two
+     * APIs. Check that the values that are not errors map to the unknown
+     * string.  */
+    for (i = WS_ERROR; i >= WS_LAST_E; i--) {
+        errStr = wolfSSH_ErrorToName(i);
+
+        if (j < missingSz && i == missing[j]) {
+            j++;
+            if (errStr != unknownStr) {
+                result = -105;
+                break;
+            }
+        }
+        else {
+            if (errStr == unknownStr) {
+                result = -106;
+                break;
+            }
+        }
+    }
+
+    /* Check if the next possible value has been given a string. */
+    if (result == 0) {
+        errStr = wolfSSH_ErrorToName(i);
+        if (errStr != unknownStr)
+            return -107;
+    }
+#endif
+
+    return result;
+}
+
+
 int main(void)
 {
     int testResult = 0, unitResult = 0;
+
+    unitResult = test_Errors();
+    printf("Errors: %s\n", (unitResult == 0 ? "SUCCESS" : "FAILED"));
+    testResult = testResult || unitResult;
 
     unitResult = test_KDF();
     printf("KDF: %s\n", (unitResult == 0 ? "SUCCESS" : "FAILED"));

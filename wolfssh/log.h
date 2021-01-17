@@ -1,6 +1,6 @@
 /* log.h
  *
- * Copyright (C) 2014-2016 wolfSSL Inc.
+ * Copyright (C) 2014-2020 wolfSSL Inc.
  *
  * This file is part of wolfSSH.
  *
@@ -26,7 +26,8 @@
  */
 
 
-#pragma once
+#ifndef _WOLFSSH_LOG_H_
+#define _WOLFSSH_LOG_H_
 
 #include <wolfssh/settings.h>
 
@@ -35,7 +36,16 @@ extern "C" {
 #endif
 
 
+#ifdef NO_TIMESTAMP
+    /* The NO_TIMESTAMP tag is deprecated. Convert to new name. */
+    #define WOLFSSH_NO_TIMESTAMP
+#endif
+
+
 enum wolfSSH_LogLevel {
+    WS_LOG_AGENT = 8,
+    WS_LOG_SCP   = 7,
+    WS_LOG_SFTP  = 6,
     WS_LOG_USER  = 5,
     WS_LOG_ERROR = 4,
     WS_LOG_WARN  = 3,
@@ -70,4 +80,6 @@ WOLFSSH_API void wolfSSH_Log(enum wolfSSH_LogLevel,
 #ifdef __cplusplus
 }
 #endif
+
+#endif /* _WOLFSSH_LOG_H_ */
 

@@ -1,6 +1,6 @@
 /* server.h
  *
- * Copyright (C) 2014-2017 wolfSSL Inc.
+ * Copyright (C) 2014-2020 wolfSSL Inc.
  *
  * This file is part of wolfSSH.
  *
@@ -19,13 +19,11 @@
  */
 
 
-#pragma once
-
-#ifndef _WOLFSSH_SERVER_H_
-#define _WOLFSSH_SERVER_H_
+#ifndef _WOLFSSH_EXAMPLES_SERVER_H_
+#define _WOLFSSH_EXAMPLES_SERVER_H_
 
 
 THREAD_RETURN WOLFSSH_THREAD server_test(void* args);
 
 
-#endif /* _WOLFSSH_SERVER_H_ */
+#endif /* _WOLFSSH_EXAMPLES_SERVER_H_ */

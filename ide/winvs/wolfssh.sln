@@ -1,6 +1,6 @@
 ﻿
-Microsoft Visual Studio Solution File, Format Version 12.00
-# Visual Studio Express 2012 for Windows Desktop
+Microsoft Visual Studio Solution File, Format Version 11.00
+# Visual Studio Express 2010 for Windows Desktop
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "wolfssh", "wolfssh\wolfssh.vcxproj", "{7C2CCF0D-A155-4914-BD1C-9A47C0530E65}"
 EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "api-test", "api-test\api-test.vcxproj", "{07D36DB5-210E-45A6-8270-2DAD9DCDEFD7}"
@@ -18,6 +18,8 @@ EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "client", "client\client.vcxproj", "{663A7133-B13B-4C37-A5EC-97CA4D60CA3A}"
 EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "testsuite", "testsuite\testsuite.vcxproj", "{BD09DA06-6D2E-4FB0-AE39-1BAE9FDAA9DD}"
+EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "wolfsftp-client", "wolfsftp-client\wolfsftp-client.vcxproj", "{8DD810D6-159B-4C40-B682-FCA11F9B3680}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -123,8 +125,27 @@ Global
 		{BD09DA06-6D2E-4FB0-AE39-1BAE9FDAA9DD}.Release|Win32.ActiveCfg = Release|Win32
 		{BD09DA06-6D2E-4FB0-AE39-1BAE9FDAA9DD}.Release|Win32.Build.0 = Release|Win32
 		{BD09DA06-6D2E-4FB0-AE39-1BAE9FDAA9DD}.Release|x64.ActiveCfg = Release|x64
+		{8DD810D6-159B-4C40-B682-FCA11F9B3680}.Debug|Win32.ActiveCfg = Debug|Win32
+		{8DD810D6-159B-4C40-B682-FCA11F9B3680}.Debug|Win32.Build.0 = Debug|Win32
+		{8DD810D6-159B-4C40-B682-FCA11F9B3680}.Debug|x64.ActiveCfg = Debug|x64
+		{8DD810D6-159B-4C40-B682-FCA11F9B3680}.Debug|x64.Build.0 = Debug|x64
+		{8DD810D6-159B-4C40-B682-FCA11F9B3680}.DLL Debug|Win32.ActiveCfg = DLL Debug|Win32
+		{8DD810D6-159B-4C40-B682-FCA11F9B3680}.DLL Debug|Win32.Build.0 = DLL Debug|Win32
+		{8DD810D6-159B-4C40-B682-FCA11F9B3680}.DLL Debug|x64.ActiveCfg = Debug|x64
+		{8DD810D6-159B-4C40-B682-FCA11F9B3680}.DLL Debug|x64.Build.0 = Debug|x64
+		{8DD810D6-159B-4C40-B682-FCA11F9B3680}.DLL Release|Win32.ActiveCfg = DLL Release|Win32
+		{8DD810D6-159B-4C40-B682-FCA11F9B3680}.DLL Release|Win32.Build.0 = DLL Release|Win32
+		{8DD810D6-159B-4C40-B682-FCA11F9B3680}.DLL Release|x64.ActiveCfg = Release|x64
+		{8DD810D6-159B-4C40-B682-FCA11F9B3680}.DLL Release|x64.Build.0 = Release|x64
+		{8DD810D6-159B-4C40-B682-FCA11F9B3680}.Release|Win32.ActiveCfg = Release|Win32
+		{8DD810D6-159B-4C40-B682-FCA11F9B3680}.Release|Win32.Build.0 = Release|Win32
+		{8DD810D6-159B-4C40-B682-FCA11F9B3680}.Release|x64.ActiveCfg = Release|x64
+		{8DD810D6-159B-4C40-B682-FCA11F9B3680}.Release|x64.Build.0 = Release|x64
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ExtensibilityGlobals) = postSolution
+		SolutionGuid = {A0B37101-A4ED-4067-8240-E824A04F25C7}
 	EndGlobalSection
 EndGlobal

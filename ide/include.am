@@ -3,3 +3,7 @@
 # All paths should be given relative to the root
 
 include ide/winvs/include.am
+include ide/CSBENCH/include.am
+include ide/MQX/include.am
+
+EXTRA_DIST += ide/Renesas

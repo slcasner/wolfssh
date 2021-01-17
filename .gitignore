@@ -34,8 +34,7 @@ Makefile.in
 *.deps
 .dirstamp
 *.libs
-stamp-h
-src/stamp-h1
+stamp-h*
 build-aux/
 wolfssh-config
 aminclude.am
@@ -51,9 +50,12 @@ diff
 examples/client/client
 examples/echoserver/echoserver
 examples/server/server
+examples/portfwd/portfwd
+examples/sftpclient/wolfsftp
+examples/scpclient/wolfscp
 
 # test output
-*.test
+tests/*.test
 *.trs
 
 # scan-build

@@ -1,6 +1,6 @@
 /* client.h
  *
- * Copyright (C) 2014-2017 wolfSSL Inc.
+ * Copyright (C) 2014-2020 wolfSSL Inc.
  *
  * This file is part of wolfSSH.
  *
@@ -19,13 +19,11 @@
  */
 
 
-#pragma once
-
-#ifndef _WOLFSSH_CLIENT_H_
-#define _WOLFSSH_CLIENT_H_
+#ifndef _WOLFSSH_EXAMPLES_CLIENT_H_
+#define _WOLFSSH_EXAMPLES_CLIENT_H_
 
 
 THREAD_RETURN WOLFSSH_THREAD client_test(void* args);
 
 
-#endif /* _WOLFSSH_CLIENT_H_ */
+#endif /* _WOLFSSH_EXAMPLES_CLIENT_H_ */

@@ -1,4 +1,4 @@
-/* io.c 
+/* io.c
  *
  * Copyright (C) 2014-2016 wolfSSL Inc.
  *
@@ -36,6 +36,16 @@
 
 #ifndef NULL
     #include <stddef.h>
+#endif
+
+#ifdef WOLFSSH_TEST_BLOCK
+    #define WOLFSSH_TEST_SERVER
+    #include "wolfssh/test.h"
+
+    /* percent of time that forced want read/write is done */
+    #ifndef WOLFSSH_BLOCK_PROB
+        #define WOLFSSH_BLOCK_PROB 75
+    #endif
 #endif
 
 
@@ -92,7 +102,6 @@ void* wolfSSH_GetIOWriteCtx(WOLFSSH* ssh)
     return NULL;
 }
 
-
 #ifndef WOLFSSH_USER_IO
 
 /* default I/O callbacks, use BSD style sockets */
@@ -103,8 +112,8 @@ void* wolfSSH_GetIOWriteCtx(WOLFSSH* ssh)
         /* lwIP needs to be configured to use sockets API in this mode */
         /* LWIP_SOCKET 1 in lwip/opt.h or in build */
         #include "lwip/sockets.h"
-        #include <errno.h>
         #ifndef LWIP_PROVIDE_ERRNO
+            #include <errno.h>
             #define LWIP_PROVIDE_ERRNO 1
         #endif
     #elif defined(FREESCALE_MQX)
@@ -127,6 +136,10 @@ void* wolfSSH_GetIOWriteCtx(WOLFSSH* ssh)
     #elif defined(MICROCHIP_MPLAB_HARMONY)
         #include "tcpip/tcpip.h"
         #include "sys/errno.h"
+        #include <errno.h>
+    #elif defined(WOLFSSL_NUCLEUS)
+        #include "nucleus.h"
+        #include "networking/nu_networking.h"
         #include <errno.h>
     #else
         #include <sys/types.h>
@@ -208,6 +221,14 @@ void* wolfSSH_GetIOWriteCtx(WOLFSSH* ssh)
         #define SOCKET_ECONNREFUSED SCK_ERROR
         #define SOCKET_ECONNABORTED SCK_ERROR
     #endif
+#elif defined(WOLFSSL_NUCLEUS)
+    #define SOCKET_EWOULDBLOCK NU_WOULD_BLOCK
+    #define SOCKET_EAGAIN      NU_WOULD_BLOCK
+    #define SOCKET_ECONNRESET  NU_NOT_CONNECTED
+    #define SOCKET_EINTR       NU_NOT_CONNECTED
+    #define SOCKET_EPIPE       NU_NOT_CONNECTED
+    #define SOCKET_ECONNREFUSED NU_CONNECTION_REFUSED
+    #define SOCKET_ECONNABORTED NU_NOT_CONNECTED
 #else
     #define SOCKET_EWOULDBLOCK EWOULDBLOCK
     #define SOCKET_EAGAIN      EAGAIN
@@ -233,16 +254,17 @@ void* wolfSSH_GetIOWriteCtx(WOLFSSH* ssh)
             TCPIP_TCP_ArrayPut((socket),(uint8_t*)(buf),(sz))
     #define RECV_FUNCTION(socket,buf,sz,flags) \
             TCPIP_TCP_ArrayGet((socket),(uint8_t*)(buf),(sz))
+#elif defined(WOLFSSL_NUCLEUS)
+    #define SEND_FUNCTION NU_Send
+    #define RECV_FUNCTION NU_Recv
 #else
     #define SEND_FUNCTION send
     #define RECV_FUNCTION recv
 #endif
 
 
-/* Translates return codes returned from 
- * send() and recv() if need be. 
- */
-static INLINE int TranslateReturnCode(int old, int sd)
+/* Translates return codes returned from send() and recv() if need be. */
+static INLINE int TranslateReturnCode(int old, WS_SOCKET_T sd)
 {
     (void)sd;
 
@@ -276,7 +298,7 @@ static INLINE int TranslateReturnCode(int old, int sd)
 
 static INLINE int LastError(void)
 {
-#ifdef USE_WINDOWS_API 
+#ifdef USE_WINDOWS_API
     return WSAGetLastError();
 #elif defined(EBSNET)
     return xn_getlasterror();
@@ -285,7 +307,6 @@ static INLINE int LastError(void)
 #endif
 }
 
-
 /* The receive embedded callback
  *  return : nb bytes read, or error
  */
@@ -293,8 +314,16 @@ int wsEmbedRecv(WOLFSSH* ssh, void* data, word32 sz, void* ctx)
 {
     int recvd;
     int err;
-    int sd = *(int*)ctx;
+    WS_SOCKET_T sd = *(WS_SOCKET_T*)ctx;
     char* buf = (char*)data;
+
+#ifdef WOLFSSH_TEST_BLOCK
+    if (tcp_select(sd, 1) == WS_SELECT_RECV_READY &&
+            (rand() % 100) < WOLFSSH_BLOCK_PROB) {
+        printf("Forced read block\n");
+        return WS_CBIO_ERR_WANT_READ;
+    }
+#endif
 
     recvd = (int)RECV_FUNCTION(sd, buf, sz, ssh->rflags);
 
@@ -343,10 +372,17 @@ int wsEmbedRecv(WOLFSSH* ssh, void* data, word32 sz, void* ctx)
  */
 int wsEmbedSend(WOLFSSH* ssh, void* data, word32 sz, void* ctx)
 {
-    int sd = *(int*)ctx;
+    WS_SOCKET_T sd = *(WS_SOCKET_T*)ctx;
     int sent;
     int err;
     char* buf = (char*)data;
+
+#ifdef WOLFSSH_TEST_BLOCK
+    if ((rand() % 100) < WOLFSSH_BLOCK_PROB) {
+        printf("Forced write block\n");
+        return WS_CBIO_ERR_WANT_WRITE;
+    }
+#endif
 
     WLOG(WS_LOG_DEBUG,"Embed Send trying to send %d", sz);
 

@@ -1,6 +1,6 @@
 /* misc.c
  *
- * Copyright (C) 2014-2016 wolfSSL Inc.
+ * Copyright (C) 2014-2020 wolfSSL Inc.
  *
  * This file is part of wolfSSH.
  *
@@ -29,15 +29,18 @@
     #include <config.h>
 #endif
 
-
-#include <wolfssh/settings.h>
-
+#ifdef WOLFSSL_USER_SETTINGS
+#include <wolfssl/wolfcrypt/settings.h>
+#else
+#include <wolfssl/options.h>
+#endif
 
 #ifndef WOLFSSH_MISC_C
 #define WOLFSSH_MISC_C
 
 
 #include <wolfssh/misc.h>
+#include <wolfssh/log.h>
 
 
 #ifdef NO_INLINE
@@ -109,6 +112,45 @@ STATIC INLINE int ConstantCompare(const byte* a, const byte* b,
 }
 
 
+/* create mpint type
+ *
+ * can decrease size of buf by 1 or more if leading bytes are 0's and not needed
+ * the input argument "sz" gets reset if that is the case. Buffer size is never
+ * increased.
+ *
+ * An example of this would be a buffer of 0053 changed to 53.
+ * If a padding value is needed then "pad" is set to 1
+ *
+ */
+STATIC INLINE void CreateMpint(byte* buf, word32* sz, byte* pad)
+{
+    word32 i;
+
+    if (buf == NULL || sz == NULL || pad == NULL) {
+        WLOG(WS_LOG_ERROR, "Internal argument error with CreateMpint");
+    }
+
+    /* check for leading 0's */
+    for (i = 0; i < *sz; i++) {
+        if (buf[i] != 0x00)
+            break;
+    }
+    *pad = (buf[i] & 0x80) ? 1 : 0;
+
+    /* if padding would be needed and have leading 0's already then do not add
+     * extra 0's */
+    if (i > 0 && *pad == 1) {
+        i = i - 1;
+        *pad = 0;
+    }
+
+    /* if i is still greater than 0 then the buffer needs shifted to remove
+     * leading 0's */
+    if (i > 0) {
+        WMEMMOVE(buf, buf + i, *sz - i);
+        *sz = *sz - i;
+    }
+}
 #undef STATIC
 
 

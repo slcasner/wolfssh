@@ -1,6 +1,6 @@
 /* echoserver.h
  *
- * Copyright (C) 2014-2017 wolfSSL Inc.
+ * Copyright (C) 2014-2020 wolfSSL Inc.
  *
  * This file is part of wolfSSH.
  *
@@ -19,13 +19,11 @@
  */
 
 
-#pragma once
-
-#ifndef _WOLFSSH_ECHOSERVER_H_
-#define _WOLFSSH_ECHOSERVER_H_
+#ifndef _WOLFSSH_EXAMPLES_ECHOSERVER_H_
+#define _WOLFSSH_EXAMPLES_ECHOSERVER_H_
 
 
 THREAD_RETURN WOLFSSH_THREAD echoserver_test(void* args);
 
 
-#endif /* _WOLFSSH_ECHOSERVER_H_ */
+#endif /* _WOLFSSH_EXAMPLES_ECHOSERVER_H_ */

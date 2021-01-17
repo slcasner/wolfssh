@@ -1,6 +1,6 @@
 /* log.c
  *
- * Copyright (C) 2014-2016 wolfSSL Inc.
+ * Copyright (C) 2014-2020 wolfSSL Inc.
  *
  * This file is part of wolfSSH.
  *
@@ -35,10 +35,12 @@
 #include <wolfssh/error.h>
 
 #include <stdlib.h>
-#include <stdio.h>
 #include <stdarg.h>
-#ifndef NO_TIMESTAMP
-    #include <time.h>
+#ifndef FREESCALE_MQX
+    #include <stdio.h>
+    #ifndef WOLFSSH_NO_TIMESTAMP
+        #include <time.h>
+    #endif
 #endif
 
 
@@ -47,9 +49,14 @@
 #endif
 
 
-static void DefaultLoggingCb(enum wolfSSH_LogLevel, const char *const);
+#ifndef WOLFSSL_NO_DEFAULT_LOGGING_CB
+    static void DefaultLoggingCb(enum wolfSSH_LogLevel, const char *const);
+    static wolfSSH_LoggingCb logFunction = DefaultLoggingCb;
+#else /* WOLFSSH_NO_DEFAULT_LOGGING_CB */
+    static wolfSSH_LoggingCb logFunction = NULL;
+#endif /* WOLFSSH_NO_DEFAULT_LOGGING_CB */
 
-static wolfSSH_LoggingCb logFunction = DefaultLoggingCb;
+
 static enum wolfSSH_LogLevel logLevel = WS_LOG_DEFAULT;
 #ifdef DEBUG_WOLFSSH
     static int logEnable = 0;
@@ -92,6 +99,7 @@ int wolfSSH_LogEnabled(void)
 }
 
 
+#ifndef WOLFSSH_NO_DEFAULT_LOGGING_CB
 /* log level string */
 static const char* GetLogStr(enum wolfSSH_LogLevel level)
 {
@@ -111,6 +119,15 @@ static const char* GetLogStr(enum wolfSSH_LogLevel level)
         case WS_LOG_USER:
             return "USER";
 
+        case WS_LOG_SFTP:
+            return "SFTP";
+
+        case WS_LOG_SCP:
+            return "SCP";
+
+        case WS_LOG_AGENT:
+            return "AGENT";
+
         default:
             return "UNKNOWN";
     }
@@ -119,9 +136,9 @@ static const char* GetLogStr(enum wolfSSH_LogLevel level)
 
 void DefaultLoggingCb(enum wolfSSH_LogLevel level, const char *const msgStr)
 {
-    char    timeStr[80];
+    char timeStr[24];
     timeStr[0] = '\0';
-#ifndef NO_TIMESTAMP
+#ifndef WOLFSSH_NO_TIMESTAMP
     {
         time_t  current;
         struct  tm local;
@@ -129,12 +146,17 @@ void DefaultLoggingCb(enum wolfSSH_LogLevel level, const char *const msgStr)
         current = WTIME(NULL);
         if (WLOCALTIME(&current, &local)) {
             /* make pretty */
-            strftime(timeStr, sizeof(timeStr), "%b %d %T %Y: ", &local);
+            strftime(timeStr, sizeof(timeStr), "%F %T ", &local);
         }
     }
-#endif /* NO_TIMESTAMP */
-    fprintf(stdout, "%s[%s] %s\n", timeStr, GetLogStr(level), msgStr);
+#endif /* WOLFSSH_NO_TIMESTAMP */
+    #ifndef WOLFSSH_LOG_PRINTF
+    fprintf(stdout, "%s[%s] %s\r\n", timeStr, GetLogStr(level), msgStr);
+    #else
+    printf("%s[%s] %s\r\n", timeStr, GetLogStr(level), msgStr);
+    #endif
 }
+#endif /* WOLFSSH_NO_DEFAULT_LOGGING_CB */
 
 
 /* our default logger */

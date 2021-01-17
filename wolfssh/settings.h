@@ -1,6 +1,6 @@
 /* settings.h
  *
- * Copyright (C) 2014-2016 wolfSSL Inc.
+ * Copyright (C) 2014-2020 wolfSSL Inc.
  *
  * This file is part of wolfSSH.
  *
@@ -26,7 +26,8 @@
  */
 
 
-#pragma once
+#ifndef _WOLFSSH_SETTINGS_H_
+#define _WOLFSSH_SETTINGS_H_
 
 #include <wolfssh/visibility.h>
 
@@ -47,10 +48,33 @@ extern "C" {
 
 #if defined (_WIN32)
     #define USE_WINDOWS_API
+    #define _CRT_SECURE_NO_WARNINGS
 #endif
 
+#ifdef WOLFSSL_NUCLEUS
+    #ifndef WOLFSSH_STOREHANDLE
+    #define WOLFSSH_STOREHANDLE
+    #endif
+#endif
+
+#ifdef FREESCALE_MQX
+    #define NO_STDIO_FILESYSTEM
+    #ifndef WOLFSSH_STOREHANDLE
+        #define WOLFSSH_STOREHANDLE
+    #endif
+
+    #ifdef WOLFSSH_SCP
+        #error wolfSSH SCP not ported to MQX yet
+    #endif
+#endif
+
+#if defined(WOLFSSH_SCP) && defined(NO_WOLFSSH_SERVER)
+    #error only SCP server side supported
+#endif
 
 #ifdef __cplusplus
 }
 #endif
+
+#endif /* _WOLFSSH_SETTINGS_H_ */
 

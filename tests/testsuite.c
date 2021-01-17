@@ -1,6 +1,6 @@
 /* testsuite.c
  *
- * Copyright (C) 2014-2017 wolfSSL Inc.
+ * Copyright (C) 2014-2020 wolfSSL Inc.
  *
  * This file is part of wolfSSH.
  *
@@ -18,6 +18,11 @@
  * along with wolfSSH.  If not, see <http://www.gnu.org/licenses/>.
  */
 
+#define WOLFSSH_TEST_CLIENT
+#define WOLFSSH_TEST_SERVER
+#define WOLFSSH_TEST_THREADING
+#define WOLFSSH_TEST_LOCKING
+
 
 #include <stdio.h>
 
@@ -32,7 +37,7 @@
 #include <wolfssh/test.h>
 #include "examples/echoserver/echoserver.h"
 #include "examples/client/client.h"
-
+#include "tests/testsuite.h"
 
 #ifndef NO_TESTSUITE_MAIN_DRIVER
 
@@ -50,6 +55,8 @@ char* myoptarg = NULL;
 #endif /* NO_TESTSUITE_MAIN_DRIVER */
 
 
+#if !defined(NO_WOLFSSH_SERVER) && !defined(NO_WOLFSSH_CLIENT)
+
 static int tsClientUserAuth(byte authType, WS_UserAuthData* authData, void* ctx)
 {
     static char password[] = "upthehill";
@@ -57,13 +64,17 @@ static int tsClientUserAuth(byte authType, WS_UserAuthData* authData, void* ctx)
     (void)authType;
     (void)ctx;
 
-    authData->sf.password.password = (byte*)password;
-    authData->sf.password.passwordSz = (word32)WSTRLEN(password);
+    if (authType == WOLFSSH_USERAUTH_PASSWORD) {
+        authData->sf.password.password = (byte*)password;
+        authData->sf.password.passwordSz = (word32)WSTRLEN(password);
+    }
+    else {
+        return WOLFSSH_USERAUTH_INVALID_AUTHTYPE;
+    }
+
     return WOLFSSH_USERAUTH_SUCCESS;
 }
 
-
-#if !defined(NO_WOLFSSH_SERVER) && !defined(NO_WOLFSSH_CLIENT)
 
 #define NUMARGS 5
 #define ARGLEN 32
@@ -100,6 +111,7 @@ int TestsuiteTest(int argc, char** argv)
 
     WSTRNCPY(serverArgv[serverArgc++], "echoserver", ARGLEN);
     WSTRNCPY(serverArgv[serverArgc++], "-1", ARGLEN);
+    WSTRNCPY(serverArgv[serverArgc++], "-f", ARGLEN);
     #ifndef USE_WINDOWS_API
         WSTRNCPY(serverArgv[serverArgc++], "-p", ARGLEN);
         WSTRNCPY(serverArgv[serverArgc++], "-0", ARGLEN);
@@ -136,13 +148,21 @@ int TestsuiteTest(int argc, char** argv)
 
     wolfSSH_Cleanup();
     FreeTcpReady(&ready);
+
+#ifdef WOLFSSH_SFTP
+    printf("testing SFTP blocking\n");
+    test_SFTP(0);
+    printf("testing SFTP non blocking\n");
+    test_SFTP(1);
+#endif
+
     return EXIT_SUCCESS;
 }
 
 #else /* !NO_WOLFSSH_SERVER && !NO_WOLFSSH_CLIENT */
 
 int TestsuiteTest(int argc, char** argv)
-
+{
     (void)argc;
     (void)argv;
     return EXIT_SUCCESS;
@@ -151,83 +171,3 @@ int TestsuiteTest(int argc, char** argv)
 #endif /* !NO_WOLFSSH_SERVER && !NO_WOLFSSH_CLIENT */
 
 
-void WaitTcpReady(func_args* args)
-{
-#if defined(_POSIX_THREADS) && !defined(__MINGW32__)
-    pthread_mutex_lock(&args->signal->mutex);
-
-    if (!args->signal->ready)
-        pthread_cond_wait(&args->signal->cond, &args->signal->mutex);
-    args->signal->ready = 0; /* reset */
-
-    pthread_mutex_unlock(&args->signal->mutex);
-#else
-    (void)args;
-#endif
-}
-
-
-void ThreadStart(THREAD_FUNC fun, void* args, THREAD_TYPE* thread)
-{
-#if defined(_POSIX_THREADS) && !defined(__MINGW32__)
-    pthread_create(thread, 0, fun, args);
-    return;
-#elif defined(WOLFSSL_TIRTOS)
-    /* Initialize the defaults and set the parameters. */
-    Task_Params taskParams;
-    Task_Params_init(&taskParams);
-    taskParams.arg0 = (UArg)args;
-    taskParams.stackSize = 65535;
-    *thread = Task_create((Task_FuncPtr)fun, &taskParams, NULL);
-    if (*thread == NULL) {
-        printf("Failed to create new Task\n");
-    }
-    Task_yield();
-#else
-    *thread = (THREAD_TYPE)_beginthreadex(0, 0, fun, args, 0, 0);
-#endif
-}
-
-
-void ThreadJoin(THREAD_TYPE thread)
-{
-#if defined(_POSIX_THREADS) && !defined(__MINGW32__)
-    pthread_join(thread, 0);
-#elif defined(WOLFSSL_TIRTOS)
-    while(1) {
-        if (Task_getMode(thread) == Task_Mode_TERMINATED) {
-            Task_sleep(5);
-            break;
-        }
-        Task_yield();
-    }
-#else
-    int res = WaitForSingleObject((HANDLE)thread, INFINITE);
-    assert(res == WAIT_OBJECT_0);
-    res = CloseHandle((HANDLE)thread);
-    assert(res);
-    (void)res; /* Suppress un-used variable warning */
-#endif
-}
-
-
-void ThreadDetach(THREAD_TYPE thread)
-{
-#if defined(_POSIX_THREADS) && !defined(__MINGW32__)
-    pthread_detach(thread);
-#elif defined(WOLFSSL_TIRTOS)
-#if 0
-    while(1) {
-        if (Task_getMode(thread) == Task_Mode_TERMINATED) {
-            Task_sleep(5);
-            break;
-        }
-        Task_yield();
-    }
-#endif
-#else
-    int res = CloseHandle((HANDLE)thread);
-    assert(res);
-    (void)res; /* Suppress un-used variable warning */
-#endif
-}

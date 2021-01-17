@@ -1,6 +1,6 @@
 /* keygen.h
  *
- * Copyright (C) 2014-2016 wolfSSL Inc.
+ * Copyright (C) 2014-2020 wolfSSL Inc.
  *
  * This file is part of wolfSSH.
  *
@@ -25,10 +25,8 @@
  */
 
 
-#pragma once
-
-#ifndef WOLFSSH_KEYGEN_H
-#define WOLFSSH_KEYGEN_H
+#ifndef _WOLFSSH_KEYGEN_H_
+#define _WOLFSSH_KEYGEN_H_
 
 #include <wolfssh/settings.h>
 #include <wolfssh/port.h>
@@ -49,4 +47,5 @@ WOLFSSH_API int wolfSSH_MakeRsaKey(byte*, word32, word32, word32);
 }
 #endif
 
-#endif
+#endif /* _WOLFSSH_KEYGEN_H_ */
+
